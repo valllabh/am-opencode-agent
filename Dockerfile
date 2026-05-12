@@ -2,14 +2,14 @@
 # opencode-agent sandbox runner. API key based providers (Anthropic, OpenAI,
 # OpenRouter, Groq). Auth keys come from the manager bootstrap response.
 
-FROM node:20-bookworm-slim AS build
+FROM public.ecr.aws/docker/library/node:20-bookworm-slim AS build
 WORKDIR /app
 COPY package.json tsconfig.json ./
 RUN npm install --omit=dev=false
 COPY src ./src
 RUN npx tsc -b
 
-FROM node:20-bookworm-slim AS runner
+FROM public.ecr.aws/docker/library/node:20-bookworm-slim AS runner
 ARG OPENCODE_VERSION=1.14.30
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
