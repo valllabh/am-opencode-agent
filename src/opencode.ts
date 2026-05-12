@@ -101,6 +101,7 @@ export async function runOpencode(args: RunOpencodeArgs): Promise<RunOpencodeRes
           code: "agent.unknown_secret_key",
           message: `missing provider key for model ${requestedModel}`,
         },
+        tokens: ZERO_TOKENS,
       };
     }
     const fs = await import("node:fs");
