@@ -14,11 +14,13 @@ export interface RunOpencodeArgs {
   workdir?: string;
   authDir?: string;
   monitor?: Monitor;
+  log?: (level: string, message: string, extras?: Record<string, unknown>) => void;
 }
 
 export interface RunOpencodeResult {
   result?: Record<string, unknown>;
   error?: { code: string; message: string; detail?: Record<string, unknown> };
+  tokens: { in: number; out: number; costUsd: number };
 }
 
 export interface ProviderResolution {
@@ -57,7 +59,11 @@ interface LogEvent {
 }
 
 export async function runOpencode(args: RunOpencodeArgs): Promise<RunOpencodeResult> {
-  const { client, bootstrap, prompt, payload, monitor } = args;
+  const { client, bootstrap, prompt, payload, monitor, log } = args;
+  const narrate = (level: string, message: string, extras?: Record<string, unknown>): void => {
+    if (log) log(level, message, extras);
+  };
+  const ZERO_TOKENS = { in: 0, out: 0, costUsd: 0 };
   const workdir = args.workdir ?? "/work";
   const authDir =
     args.authDir ?? `${process.env.HOME ?? "/root"}/.local/share/opencode`;
@@ -74,6 +80,7 @@ export async function runOpencode(args: RunOpencodeArgs): Promise<RunOpencodeRes
         code: "agent.unknown_secret_key",
         message: `missing provider key for model ${requestedModel}`,
       },
+      tokens: ZERO_TOKENS,
     };
   }
 
@@ -164,6 +171,14 @@ export async function runOpencode(args: RunOpencodeArgs): Promise<RunOpencodeRes
   );
 
   monitor?.markActivity();
+  narrate("info", "opencode: child spawned", {
+    provider: resolution.provider,
+    model: resolution.model,
+    pid: child.pid,
+    workdir,
+    awsRegion: spawnEnv.AWS_REGION,
+    secretEnvKeys: Object.keys(bootstrap.secrets),
+  });
   enqueue({
     ts: new Date().toISOString(),
     level: "info",
@@ -224,6 +239,7 @@ export async function runOpencode(args: RunOpencodeArgs): Promise<RunOpencodeRes
   await flushing;
   await flush();
 
+  narrate("info", "opencode: child closed", { exitCode, lastStderr: lastStderr.slice(0, 500) });
   if (exitCode !== 0) {
     return {
       error: {
@@ -231,6 +247,7 @@ export async function runOpencode(args: RunOpencodeArgs): Promise<RunOpencodeRes
         message: lastStderr || `opencode exited with code ${exitCode}`,
         detail: { exitCode },
       },
+      tokens: ZERO_TOKENS,
     };
   }
 
@@ -247,5 +264,5 @@ export async function runOpencode(args: RunOpencodeArgs): Promise<RunOpencodeRes
     /* fall through */
   }
 
-  return { result };
+  return { result, tokens: ZERO_TOKENS };
 }
