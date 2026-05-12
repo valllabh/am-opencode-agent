@@ -168,7 +168,9 @@ export async function runOpencode(args: RunOpencodeArgs): Promise<RunOpencodeRes
       "--model",
       resolution.model,
     ],
-    { cwd: workdir, env: spawnEnv },
+    // stdio: stdin closed so opencode treats it as headless. Mirrors the fix
+    // in am-pi-agent: a connected stdin pipe makes some CLIs wait for input.
+    { cwd: workdir, env: spawnEnv, stdio: ["ignore", "pipe", "pipe"] },
   );
 
   monitor?.markActivity();
