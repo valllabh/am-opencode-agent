@@ -7,7 +7,7 @@ version: 0.2
 env:
   variables:
     AWS_REGION: us-east-1
-    IMAGE_REPO_NAME: agent-manager/sandbox-opencode
+    IMAGE_REPO_NAME: agent-manager/sandbox-ecs-opencode
 
 phases:
   pre_build:
