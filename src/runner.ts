@@ -57,19 +57,11 @@ async function main(): Promise<void> {
   });
 
   const payload = bootstrap.task.payload as Record<string, unknown>;
-  // Story 19-1e: soulMd is the canonical system prompt; payload.prompt is
-  // the legacy per-task instruction text accepted for one release.
-  const systemPrompt =
-    typeof bootstrap.soulMd === "string" && bootstrap.soulMd.trim().length > 0
-      ? bootstrap.soulMd
-      : "";
-  let legacyTaskText = "";
-  if (typeof payload.prompt === "string" && (payload.prompt as string).length > 0) {
-    legacyTaskText = payload.prompt as string;
-    console.warn(
-      "[runner] story 19-1e fallback: reading payload.prompt as legacy task instructions (one release deprecation)",
-    );
+  // Story 19-1z: soulMd is the only source for the system prompt.
+  if (!(typeof bootstrap.soulMd === "string" && bootstrap.soulMd.trim().length > 0)) {
+    throw new Error("agent.soulMd missing or empty; required after story 19-1z");
   }
+  const systemPrompt = bootstrap.soulMd;
   const workdir = "/work";
 
   const monitor = startMonitor({
@@ -138,7 +130,7 @@ async function main(): Promise<void> {
   }
 
   try {
-    if (systemPrompt.length > 0 || legacyTaskText.length > 0) {
+    {
       logT("info", "runner: loading skills");
       const skills = await client.loadSkills();
       logT("info", "runner: skills loaded", {
@@ -148,18 +140,13 @@ async function main(): Promise<void> {
       const stagedCount = await stageSkillAssets({ client, skills, workdir, log: logT });
       logT("info", "runner: skill assets staged", { count: stagedCount });
       const skillsContext = buildSkillsContext(skills);
-      fullPrompt = (
-        systemPrompt +
-        skillsContext +
-        (legacyTaskText ? `\n\n# Task\n\n${legacyTaskText}` : "")
-      ).trimStart();
+      fullPrompt = (systemPrompt + skillsContext).trimStart();
       logT("info", "runner: prompt assembled", {
         chars: fullPrompt.length,
         skillsContextChars: skillsContext.length,
-        userPromptChars: legacyTaskText.length,
       });
       logT("info", "runner: dispatching to opencode runtime", {
-        model: bootstrap.agent.model ?? "(payload fallback)",
+        model: bootstrap.agent.model,
       });
 
       const out = await runOpencode({
@@ -187,9 +174,6 @@ async function main(): Promise<void> {
       } else {
         runResult = out.result ?? { ok: true };
       }
-    } else {
-      logT("warn", "runner: no prompt in payload; nothing to do");
-      runResult = { ok: true, echo: payload };
     }
   } catch (err) {
     const e = err as Error;

@@ -59,7 +59,7 @@ interface LogEvent {
 }
 
 export async function runOpencode(args: RunOpencodeArgs): Promise<RunOpencodeResult> {
-  const { client, bootstrap, prompt, payload, monitor, log } = args;
+  const { client, bootstrap, prompt, monitor, log } = args;
   const narrate = (level: string, message: string, extras?: Record<string, unknown>): void => {
     if (log) log(level, message, extras);
   };
@@ -68,23 +68,11 @@ export async function runOpencode(args: RunOpencodeArgs): Promise<RunOpencodeRes
   const authDir =
     args.authDir ?? `${process.env.HOME ?? "/root"}/.local/share/opencode`;
 
-  // Story 19-1e: precedence is agent.model > payload.model > DEFAULT_MODEL.
-  // payload.model is the legacy fallback accepted for one release.
-  let fellBackFromPayload = false;
-  let requestedModel: string;
-  if (typeof bootstrap.agent.model === "string" && bootstrap.agent.model.length > 0) {
-    requestedModel = bootstrap.agent.model;
-  } else if (typeof payload.model === "string" && payload.model.length > 0) {
-    requestedModel = payload.model;
-    fellBackFromPayload = true;
-  } else {
-    requestedModel = DEFAULT_MODEL;
+  // Story 19-1z: agent.model is the only source.
+  if (!(typeof bootstrap.agent.model === "string" && bootstrap.agent.model.length > 0)) {
+    throw new Error("agent.model missing from bootstrap; required after story 19-1z");
   }
-  if (fellBackFromPayload) {
-    console.warn(
-      "[opencode] story 19-1e fallback: agent.model missing; reading payload.model (one release deprecation)",
-    );
-  }
+  const requestedModel: string = bootstrap.agent.model;
 
   const resolution = resolveProvider(requestedModel);
   if (!resolution) {
@@ -163,18 +151,11 @@ export async function runOpencode(args: RunOpencodeArgs): Promise<RunOpencodeRes
 
   const spawnEnv: NodeJS.ProcessEnv = { ...process.env };
   if (resolution.provider === "amazon-bedrock") {
-    // Story 19-1e: env.config.region > payload.region > AWS_REGION > us-east-1.
-    let resolvedRegion: string | undefined;
-    if (bootstrap.env && bootstrap.env.region) {
-      resolvedRegion = bootstrap.env.region;
-    } else if (typeof payload.region === "string" && payload.region.length > 0) {
-      resolvedRegion = payload.region;
-      console.warn(
-        "[opencode] story 19-1e fallback: env.region missing; reading payload.region (one release deprecation)",
-      );
+    // Story 19-1z: env.config.region is the only source.
+    if (!(bootstrap.env && bootstrap.env.region)) {
+      throw new Error("env.region missing from bootstrap; required after story 19-1z");
     }
-    spawnEnv.AWS_REGION =
-      resolvedRegion ?? spawnEnv.AWS_REGION ?? spawnEnv.AWS_DEFAULT_REGION ?? "us-east-1";
+    spawnEnv.AWS_REGION = bootstrap.env.region;
     spawnEnv.AWS_DEFAULT_REGION = spawnEnv.AWS_REGION;
   }
 
